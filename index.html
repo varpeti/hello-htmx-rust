@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title></title>
+    <link href="style.css" rel="stylesheet">
+    <script src="https://unpkg.com/htmx.org@1.9.12" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
+  </head>
+  <body>
+
+<main>
+  <h1>Echo Test</h1>
+
+  <h3>Description</h3>
+  <p>This test lets you send and receive data to and from the WebSocket server.  Every message that you send to the server will be "echoed"
+  back to you in a separate message</p>
+
+  <div class="elastic container" hx-ext="ws" ws-connect="/ws">
+
+      <form id="msgt_msg" ws-send>
+          <h3>Send a Message</h3>
+          <div>
+              <input type="text" name="message" style="width:500px;" value="This Is The Message" />
+              <input type="submit" value="Send" class="btn primary"/>
+          </div>
+      </form>
+
+      <br>
+      <h3>Receive a Message</h3>
+      <div id="idMessage"></div>
+  </div>
+</main>
+
+
+    <script>
+      let auth_token = "42"
+      document.body.addEventListener('htmx:wsConfigSend', function(evt) {
+          evt.detail.headers['Auth-Token'] = auth_token
+      });
+    </script>
+
+  </body>
+</html>
