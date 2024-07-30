@@ -1,72 +1,37 @@
-use futures_util::{SinkExt, StreamExt};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use warp::{filters::ws::Message, ws::WebSocket, Filter};
+mod clients;
+mod handle_websocket;
+
+use clients::Clients;
+use handle_websocket::handle_websocket;
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use tokio::sync::Mutex;
+use warp::Filter;
 
 #[tokio::main]
 async fn main() {
-    // Define a simple GET route
+    // Define a simple GET route to serve index.html
     let index = warp::path::end().and(warp::fs::file("./index.html"));
 
-    // Define a WebSocket route
+    let connections = Arc::new(Mutex::new(HashMap::new()));
+
+    // Define a WebSocket route to handle everything else
     let ws_route = warp::path("ws")
         .and(warp::ws())
-        .map(|ws: warp::ws::Ws| ws.on_upgrade(handle_websocket));
+        .and(warp::addr::remote())
+        .and(with_clients(connections.clone()))
+        .map(
+            |ws: warp::ws::Ws, addr: Option<SocketAddr>, clients: Clients| {
+                ws.on_upgrade(move |ws| handle_websocket(ws, addr, clients))
+            },
+        );
 
-    // Combine the routes
     let routes = index.or(ws_route);
-
-    // Start the server
-    println!("Server starting on http://127.0.0.1:3030");
     warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
+    println!("Server started on http://127.0.0.1:3030");
 }
 
-async fn handle_websocket(ws: WebSocket) {
-    println!("WebSocket connection established");
-
-    // Split the socket into a sender and receive of messages.
-    let (mut tx, mut rx) = ws.split();
-
-    // Use a while let loop to receive messages
-    while let Some(result) = rx.next().await {
-        match result {
-            Ok(msg) => {
-                // Process the message based on its type
-                if let Ok(text) = msg.to_str() {
-                    println!("Received message: {}", text);
-
-                    match serde_json::from_str::<UserMessage>(text) {
-                        Ok(user_message) => {
-                            // Echo the message back to the client
-                            tx.send(Message::text(format!(
-                                r##"<div hx-swap-oob="beforeend:#idMessage"><p>{}</p></div>"##,
-                                user_message.message
-                            )))
-                            .await
-                            .expect("Error sendig Message!")
-                        }
-                        Err(err) => eprintln!("Parsing error: {:?}", err),
-                    }
-                } else if msg.is_binary() {
-                    println!("Received binary message of {} bytes", msg.as_bytes().len());
-                } else if msg.is_close() {
-                    println!("Received close message");
-                    break;
-                }
-            }
-            Err(e) => {
-                eprintln!("Error receiving message: {:?}", e);
-                break;
-            }
-        }
-    }
-
-    println!("WebSocket connection closed");
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct UserMessage {
-    message: String,
-    #[serde(rename = "HEADERS")]
-    headers: Value,
+fn with_clients(
+    clients: Clients,
+) -> impl Filter<Extract = (Clients,), Error = std::convert::Infallible> + Clone {
+    warp::any().map(move || clients.clone())
 }
