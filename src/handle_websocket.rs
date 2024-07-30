@@ -67,7 +67,7 @@ async fn handle_text_message(text: &str, mut clients: Clients) {
             // Echo the message back to the client
             broadcast(
                 &mut clients,
-                |addr| true,
+                |_client_id| true,
                 format!(
                     r##"<div hx-swap-oob="beforeend:#idMessage"><p>{}</p><br/></div>"##,
                     user_message.message

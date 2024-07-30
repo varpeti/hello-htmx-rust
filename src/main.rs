@@ -26,8 +26,8 @@ async fn main() {
         );
 
     let routes = index.or(ws_route);
+    println!("Server starting on http://127.0.0.1:3030");
     warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
-    println!("Server started on http://127.0.0.1:3030");
 }
 
 fn with_clients(
