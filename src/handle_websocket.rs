@@ -1,32 +1,37 @@
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::net::SocketAddr;
-use warp::{filters::ws::Message, ws::WebSocket};
+use warp::ws::WebSocket;
 
-use crate::clients::{add_connection, broadcast, remove_connection, Clients};
+use crate::{
+    clients::{broadcast, remove_connection, Clients, UserId},
+    DB,
+};
 
-pub async fn handle_websocket(ws: WebSocket, addr: Option<SocketAddr>, clients: Clients) {
-    println!("WebSocket connection established: {:?}", addr);
-
-    let addr = match addr {
-        Some(addr) => addr,
-        None => {
-            eprintln!("WebSocket without address? Closing...");
-            return;
-        }
-    };
+pub async fn handle_websocket(ws: WebSocket, db: DB, clients: Clients) {
+    println!("WebSocket connection established: {:?}", &ws);
 
     // Split the socket into a sender and receive of messages.
     let (tx, mut rx) = ws.split();
 
-    add_connection(&clients, addr, tx).await;
+    let user_id: Option<UserId> = None;
 
     // Use a while let loop to receive messages
     while let Some(result) = rx.next().await {
         match result {
             Ok(msg) => {
-                if !handle_message(msg, clients.clone()).await {
+                if let Ok(text) = msg.to_str() {
+                    handle_text_message(text, clients.clone()).await;
+                } else if msg.is_close() {
+                    println!("Received close message");
+                    break;
+                } else {
+                    eprintln!(
+                        "Unexpected Type! It is binary: {}, ping: {}, pong: {}",
+                        msg.is_binary(),
+                        msg.is_ping(),
+                        msg.is_pong()
+                    );
                     break;
                 }
             }
@@ -37,27 +42,11 @@ pub async fn handle_websocket(ws: WebSocket, addr: Option<SocketAddr>, clients: 
         }
     }
 
-    remove_connection(&clients, &addr).await;
+    if let Some(user_id) = user_id {
+        remove_connection(&clients, &user_id).await;
+    }
 
     println!("WebSocket connection closed");
-}
-
-async fn handle_message(msg: Message, clients: Clients) -> bool {
-    if let Ok(text) = msg.to_str() {
-        handle_text_message(text, clients).await;
-        true
-    } else if msg.is_close() {
-        println!("Received close message");
-        false
-    } else {
-        eprintln!(
-            "Unexpected Type! It is binary: {}, ping: {}, pong: {}",
-            msg.is_binary(),
-            msg.is_ping(),
-            msg.is_pong()
-        );
-        false
-    }
 }
 
 async fn handle_text_message(text: &str, mut clients: Clients) {

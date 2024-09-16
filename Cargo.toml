@@ -1,5 +1,5 @@
 [package]
-name = "hello-htmx-rust"
+name = "hello-htmx-rust-postgres-login"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,3 +10,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 uuid = { version = "1", features = ["v4"] }
 tokio = { version = "1", features = ["full"] }
+tokio-postgres = { version = "0.7", features = [
+  "with-uuid-1",
+  "with-chrono-0_4",
+  "array-impls",
+] }

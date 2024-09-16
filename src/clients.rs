@@ -1,23 +1,23 @@
 use futures_util::{stream::SplitSink, SinkExt};
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use uuid::Uuid;
 use warp::filters::ws::{Message, WebSocket};
 
-pub type ClientId = SocketAddr;
+pub type UserId = Uuid;
 pub type Sender = SplitSink<WebSocket, Message>;
-pub type Clients = Arc<Mutex<HashMap<ClientId, Sender>>>;
+pub type Clients = Arc<Mutex<HashMap<UserId, Sender>>>;
 
-pub async fn add_connection(clients: &Clients, client_id: ClientId, sender: Sender) {
-    clients.lock().await.insert(client_id, sender);
+pub async fn add_connection(clients: &Clients, user_id: Uuid, sender: Sender) {
+    clients.lock().await.insert(user_id, sender);
 }
 
-pub async fn remove_connection(clients: &Clients, client_id: &ClientId) {
+pub async fn remove_connection(clients: &Clients, client_id: &UserId) {
     clients.lock().await.remove(client_id);
 }
 
-pub async fn broadcast(clients: &mut Clients, filter: fn(&ClientId) -> bool, message: &str) {
+pub async fn broadcast(clients: &mut Clients, filter: fn(&UserId) -> bool, message: &str) {
     let mut clients = clients.lock().await;
     for (client_id, sender) in clients.iter_mut() {
         if filter(client_id) {
