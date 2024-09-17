@@ -1,18 +1,24 @@
-use futures_util::StreamExt;
+use std::sync::Arc;
+
+use futures_util::{stream::SplitSink, SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use warp::ws::WebSocket;
+use tokio::sync::Mutex;
+use warp::{filters::ws::Message, ws::WebSocket};
 
 use crate::{
-    clients::{broadcast, remove_connection, Clients, UserId},
+    clients::{remove_connection, Clients, UserId},
     DB,
 };
+
+type TX = Arc<Mutex<SplitSink<WebSocket, Message>>>;
 
 pub async fn handle_websocket(ws: WebSocket, db: DB, clients: Clients) {
     println!("WebSocket connection established: {:?}", &ws);
 
     // Split the socket into a sender and receive of messages.
     let (tx, mut rx) = ws.split();
+    let tx = Arc::new(Mutex::new(tx));
 
     let user_id: Option<UserId> = None;
 
@@ -20,8 +26,8 @@ pub async fn handle_websocket(ws: WebSocket, db: DB, clients: Clients) {
     while let Some(result) = rx.next().await {
         match result {
             Ok(msg) => {
-                if let Ok(text) = msg.to_str() {
-                    handle_text_message(text, clients.clone()).await;
+                if let Ok(json_text) = msg.to_str() {
+                    handle_json_message(tx.clone(), db.clone(), clients.clone(), json_text).await;
                 } else if msg.is_close() {
                     println!("Received close message");
                     break;
@@ -49,21 +55,22 @@ pub async fn handle_websocket(ws: WebSocket, db: DB, clients: Clients) {
     println!("WebSocket connection closed");
 }
 
-async fn handle_text_message(text: &str, mut clients: Clients) {
-    println!("Received message: {}", text);
-    match serde_json::from_str::<UserMessage>(text) {
+async fn handle_json_message(tx: TX, db: DB, clients: Clients, json_text: &str) {
+    println!("Received message: {}", json_text);
+    match serde_json::from_str::<UserMessage>(json_text) {
         Ok(user_message) => {
-            // Echo the message back to the client
-            broadcast(
-                &mut clients,
-                |_client_id| true,
-                format!(
+            // Echo
+            let mut tx = tx.lock().await;
+
+            if let Err(err) = tx
+                .send(Message::text(format!(
                     r##"<div hx-swap-oob="beforeend:#idMessage"><p>{}</p><br/></div>"##,
                     user_message.message
-                )
-                .as_ref(),
-            )
-            .await;
+                )))
+                .await
+            {
+                eprintln!("Sending error: {:?}", err);
+            }
         }
         Err(err) => eprintln!("Parsing error: {:?}", err),
     }

@@ -1,3 +1,4 @@
+mod auth;
 mod clients;
 mod handle_websocket;
 
@@ -44,25 +45,12 @@ fn with_clients(
 }
 
 async fn connect_db() -> Result<DB, Box<dyn Error>> {
-    // Connect to the database.
     let (client, connection) =
         tokio_postgres::connect("postgres://tstuser:tstpw@db:5432/tstdb", NoTls).await?;
-
-    // The connection object performs the actual communication with the database,
-    // so spawn it off to run on its own.
     tokio::spawn(async move {
         if let Err(e) = connection.await {
             eprintln!("connection error: {}", e);
         }
     });
-
-    // Now we can execute a simple statement that just returns its parameter.
-    let rows = client.query("SELECT $1::TEXT", &[&"db test"]).await?;
-
-    // And then check that we got back the same string we sent over.
-    let value: &str = rows[0].get(0);
-    println!("assert: 'db test' = '{}'", value);
-    assert_eq!(value, "db test");
-
     Ok(Arc::new(client))
 }
