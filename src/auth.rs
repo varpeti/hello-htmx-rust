@@ -1,9 +1,18 @@
 use std::{error::Error, thread::available_parallelism};
 
 use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    password_hash::{
+        rand_core::{OsRng, RngCore},
+        PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
+    },
     Algorithm, Argon2, Params, Version,
 };
+use lettre::{
+    message::header::ContentType, transport::smtp::authentication::Credentials, Message,
+    SmtpTransport, Transport,
+};
+
+use crate::config::EmailConfig;
 
 /* https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
     m=47104 (46 MiB), t=1
@@ -14,6 +23,11 @@ use argon2::{
 */
 const MEMORY_COST_KB: u32 = 46 * 1024;
 const TIME_COST: u32 = 2;
+const ALPHABET: [char; 32] = [
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U',
+    'V', 'W', 'X', 'Y', 'Z', '2', '3', '4', '5', '6', '7', '8', '9',
+];
+const CODE_LEN: usize = 8;
 
 fn get_a2id<'a>() -> Result<Argon2<'a>, Box<dyn Error>> {
     let num_of_available_paralelism: u32 = match available_parallelism() {
@@ -46,4 +60,36 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, Box<dyn Error
         Ok(_) => Ok(true),
         Err(_) => Ok(false),
     }
+}
+
+pub async fn send_code_to_email(
+    config: EmailConfig,
+    to_email: String,
+) -> Result<(), Box<dyn Error>> {
+    let code = generate_human_readable_code()?;
+    let email = Message::builder()
+        .from(config.sender_email.parse()?)
+        .to(to_email.parse()?)
+        .subject("Verification Code")
+        .header(ContentType::TEXT_PLAIN)
+        .body(code)?;
+    let creds = Credentials::new(config.username.clone(), config.password.clone());
+    let mailer = SmtpTransport::relay(&config.smtp)?
+        .credentials(creds)
+        .build();
+
+    mailer.send(&email)?;
+    Ok(())
+}
+
+fn generate_human_readable_code() -> Result<String, Box<dyn Error>> {
+    let mut bytes = [0u8; CODE_LEN];
+    OsRng.fill_bytes(&mut bytes);
+    let mut code = String::new();
+    let divider = 256 / ALPHABET.len();
+    for byte in bytes.into_iter() {
+        let i = byte as usize / divider;
+        code.push(ALPHABET[i]);
+    }
+    Ok(code)
 }

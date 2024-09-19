@@ -1,24 +1,4 @@
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-    depends_on:
-      - db
-    environment:
-      - DATABASE_URL=postgres://tstuser:tstpw@db:5432/tstdb
-    volumes:
-      - ./Cargo.lock:/app/Cargo.lock
-      - ./Cargo.toml:/app/Cargo.toml
-      - ./src:/app/src
-      - ./edb_orm/:/app/edb_orm
-      - ./index.html:/app/.index.html
-      # TODO template files
-      - ./cargo-cache:/usr/local/cargo/registry
-    command: cargo watch -x run
-
   db:
     image: postgres:latest
     ports:
@@ -31,5 +11,4 @@ services:
       - ./database:/var/lib/postgresql/data
 
 volumes:
-  cargo-cache:
   database:

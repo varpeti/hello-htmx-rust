@@ -1,12 +1,14 @@
 mod auth;
 mod clients;
+mod config;
 mod handle_websocket;
 mod uuser;
 
-use auth::hash_password;
+use auth::{hash_password, send_code_to_email};
 use clients::Clients;
+use config::Config;
 use handle_websocket::handle_websocket;
-use std::{collections::HashMap, error::Error, str::FromStr, sync::Arc};
+use std::{collections::HashMap, error::Error, net::SocketAddr, str::FromStr, sync::Arc};
 use tokio::sync::Mutex;
 use tokio_postgres::NoTls;
 use uuid::Uuid;
@@ -17,6 +19,12 @@ type DB = Arc<tokio_postgres::Client>;
 
 #[tokio::main]
 async fn main() {
+    let config = Config::new();
+
+    send_code_to_email(config.email, "TEST EMAIL".to_string())
+        .await
+        .expect("Failed to send email!");
+
     let db = connect_db().await.expect("Could not connect to Database!");
 
     // Define a simple GET route to serve index.html
@@ -34,9 +42,17 @@ async fn main() {
         });
 
     let routes = index.or(ws_route);
-    // TODO: from env
-    println!("Server starting on http://localhost:8080");
-    warp::serve(routes).run(([0, 0, 0, 0], 8080)).await;
+
+    println!("Server starting on http://{}", config.webserver.ip_port);
+    warp::serve(routes)
+        .run(
+            config
+                .webserver
+                .ip_port
+                .parse::<SocketAddr>()
+                .expect("Invalid IP:PORT!"),
+        )
+        .await;
 }
 
 fn with_db(db: DB) -> impl Filter<Extract = (DB,), Error = std::convert::Infallible> + Clone {
