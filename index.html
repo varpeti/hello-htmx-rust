@@ -1,44 +1,56 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title></title>
-    <script src="https://unpkg.com/htmx.org@1.9.12" crossorigin="anonymous"></script>
+    <script
+      src="https://unpkg.com/htmx.org@1.9.12"
+      crossorigin="anonymous"
+    ></script>
     <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
   </head>
   <body>
+    <main hx-ext="ws" ws-connect="/ws">
+      <div id="login">
+        <h3>Login</h3>
+        <form ws-send>
+          <input type="email" name="email" placeholder="E-mail" />
+          <input type="password" name="password" placeholder="Password" />
+          <input type="button" id="LoginWithPassword" value="Login" ws-send />
+          <input
+            type="button"
+            id="LoginWithEmail"
+            value="Login with E-mail"
+            ws-send
+          />
+        </form>
+      </div>
 
-<main>
-  <h1>Echo Test</h1>
+      <h3>Send a Message</h3>
+      <input type="text" id="ChatMessage" name="chat_message" ws-send />
 
-  <h3>Description</h3>
-  <p>This test lets you send and receive data to and from the WebSocket server.  Every message that you send to the server will be "echoed"
-  back to you in a separate message</p>
-
-  <div class="elastic container" hx-ext="ws" ws-connect="/ws">
-
-      <form id="msgt_msg" ws-send>
-          <h3>Send a Message</h3>
-          <div>
-              <input type="text" name="message" style="width:500px;" value="This Is The Message" />
-              <input type="submit" value="Send" class="btn primary"/>
-          </div>
-      </form>
-
-      <br>
       <h3>Receive a Message</h3>
       <div id="idMessage"></div>
-  </div>
-</main>
-
+    </main>
 
     <script>
-      let auth_token = "42"
-      document.body.addEventListener('htmx:wsConfigSend', function(evt) {
-          evt.detail.headers['Auth-Token'] = auth_token
+      document.body.addEventListener("htmx:wsConfigSend", (e) => {
+        let id = e.detail.headers["HX-Trigger"];
+        if (!id && id !== 0 && id !== false) {
+          console.error("id is null", e);
+          //e.preventDefault();
+        }
+        let name = e.detail.headers["HX-Trigger-Name"];
+        if (!name && name !== 0 && name !== false) {
+          console.error("name is null", e);
+          //e.preventDefault();
+        }
+        let data = e.detail.parameters;
+        delete e.detail.headers;
+        e.detail.parameters = {};
+        e.detail.parameters[id] = data;
       });
     </script>
-
   </body>
 </html>
